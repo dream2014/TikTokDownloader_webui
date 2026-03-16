@@ -1028,6 +1028,8 @@ class TikTok:
         cookie: str = None,
         proxy: str = None,
     ):
+        # 确保客户端始终可用
+        await self.parameter.ensure_client()
         processor = DetailTikTok if tiktok else Detail
         return await self.__handle_detail(
             tiktok,
@@ -1085,7 +1087,9 @@ class TikTok:
         )
         if api:
             return detail_data
-        await self.downloader.run(detail_data, "detail", tiktok=tiktok)
+        success = await self.downloader.run(detail_data, "detail", tiktok=tiktok)
+        if not success:
+            return None
         return self._get_preview_image(detail_data[0])
 
     @staticmethod

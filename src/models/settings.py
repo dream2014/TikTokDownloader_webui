@@ -98,6 +98,8 @@ class Settings(BaseModel):
     live_qualities: str | None = None
     douyin_platform: bool | None = None
     tiktok_platform: bool | None = None
+    download_quality: str | None = None
+    thread_count: int | None = None
     browser_info: BrowserInfo | None = None
     browser_info_tiktok: TikTokBrowserInfo | None = None
 

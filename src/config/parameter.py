@@ -106,6 +106,8 @@ class Parameter:
         timeout=10,
         douyin_platform=True,
         tiktok_platform=True,
+        download_quality="high",
+        thread_count=3,
         **kwargs,
     ):
         self.settings = settings
@@ -182,12 +184,14 @@ class Parameter:
         self.tiktok_platform = self.check_bool_true(
             tiktok_platform,
         )
+        self.download_quality = download_quality
+        self.thread_count = thread_count
 
-        self.browser_info = self.merge_browser_info(
+        self.browser_info = Parameter.merge_browser_info(
             browser_info,
             {},
         )
-        self.browser_info_tiktok = self.merge_browser_info(
+        self.browser_info_tiktok = Parameter.merge_browser_info(
             browser_info_tiktok,
             {},
         )
@@ -245,6 +249,8 @@ class Parameter:
             "live_qualities": self.__check_live_qualities,
             "douyin_platform": self.check_bool_true,
             "tiktok_platform": self.check_bool_true,
+            "download_quality": self.check_str,
+            "thread_count": self.__check_thread_count,
         }
         # self.__BROWSER_INFO = {
         #     "browser_info": None,
@@ -846,10 +852,18 @@ class Parameter:
             "download": self.download,
             "max_size": self.max_size,
             "chunk": self.chunk,
+            "timeout": self.timeout,
             "max_retry": self.max_retry,
             "max_pages": self.max_pages,
             "run_command": " ".join(self.run_command[::-1]),
             "ffmpeg": self.ffmpeg.path or "",
+            "live_qualities": self.live_qualities,
+            "douyin_platform": self.douyin_platform,
+            "tiktok_platform": self.tiktok_platform,
+            "browser_info": self.browser_info,
+            "browser_info_tiktok": self.browser_info_tiktok,
+            "download_quality": self.download_quality,
+            "thread_count": self.thread_count,
         }
 
     async def set_settings_data(
@@ -857,38 +871,47 @@ class Parameter:
         data: dict,
     ) -> None:
         self.set_urls_params(
-            data.pop("accounts_urls"),
-            data.pop("mix_urls"),
-            data.pop("owner_url"),
-            data.pop("accounts_urls_tiktok"),
-            data.pop("mix_urls_tiktok"),
-            data.pop("owner_url_tiktok"),
+            data.pop("accounts_urls", []),
+            data.pop("mix_urls", []),
+            data.pop("owner_url", {}),
+            data.pop("accounts_urls_tiktok", []),
+            data.pop("mix_urls_tiktok", []),
+            data.pop("owner_url_tiktok", None),
         )
         self.set_cookie(
             data.pop(
                 "cookie",
+                "",
             ),
             data.pop(
                 "cookie_tiktok",
+                "",
             ),
         )
         self.set_browser_info(
             data.pop(
                 "browser_info",
+                {},
             ),
             data.pop(
                 "browser_info_tiktok",
+                {},
             ),
         )
         await self.set_proxy(
             data.pop(
                 "proxy",
+                None,
             ),
             data.pop(
                 "proxy_tiktok",
+                None,
             ),
         )
         self.set_general_params(data)
+        # 保存设置到配置文件
+        settings_data = self.get_settings_data()
+        self.settings.update(settings_data)
 
     async def __update_cookie_data(self, data: dict) -> None:
         for i, j in zip(("cookie", "cookie_tiktok"), (_("抖音"), "TikTok")):
@@ -945,23 +968,39 @@ class Parameter:
     def set_cookie(
         self, cookie: str | dict[str, str], cookie_tiktok: str | dict[str, str]
     ):
-        if cookie:
-            self.cookie_dict, self.cookie_str = self.__check_cookie(cookie)
-            self.cookie_state: bool = self.__check_cookie_state()
-            self.set_uif_id()
-        if cookie_tiktok:
-            self.cookie_dict_tiktok, self.cookie_str_tiktok = (
-                self.__check_cookie_tiktok(
-                    cookie_tiktok,
-                )
+        # 无论cookie是否为空，都更新属性
+        self.cookie_dict, self.cookie_str = self.__check_cookie(cookie)
+        self.cookie_state: bool = self.__check_cookie_state()
+        self.set_uif_id()
+        
+        # 无论cookie_tiktok是否为空，都更新属性
+        self.cookie_dict_tiktok, self.cookie_str_tiktok = (
+            self.__check_cookie_tiktok(
+                cookie_tiktok,
             )
-            self.cookie_tiktok_state: bool = self.__check_cookie_state(True)
-            self.__update_download_headers_tiktok()
+        )
+        self.cookie_tiktok_state: bool = self.__check_cookie_state(True)
+        self.__update_download_headers_tiktok()
+        
+        # 更新headers中的cookie
+        self.set_headers_cookie()
+        
+        # 重新创建客户端以确保连接可用
+        from ..tools import create_client
+        self.client = create_client(
+            timeout=self.timeout,
+            proxy=self.proxy,
+        )
+        self.client_tiktok = create_client(
+            timeout=self.timeout,
+            proxy=self.proxy_tiktok,
+        )
 
     def set_general_params(self, data: dict[str, Any]) -> None:
         for i, j in data.items():
             if j is not None:
-                self.__CHECK[i](j)
+                # 检查参数并设置值
+                setattr(self, i, self.__CHECK[i](j))
 
     async def set_proxy(self, proxy: str | None, proxy_tiktok: str | None):
         if isinstance(proxy, str):
@@ -1008,6 +1047,27 @@ class Parameter:
     async def close_client(self) -> None:
         await self.client.aclose()
         await self.client_tiktok.aclose()
+    
+    async def ensure_client(self) -> None:
+        """确保客户端始终可用"""
+        try:
+            # 尝试发送一个简单的请求来检查客户端是否可用
+            await self.client.get('https://www.douyin.com', timeout=1)
+        except Exception:
+            # 如果客户端不可用，重新创建客户端
+            self.client = create_client(
+                timeout=self.timeout,
+                proxy=self.proxy,
+            )
+        try:
+            # 尝试发送一个简单的请求来检查TikTok客户端是否可用
+            await self.client_tiktok.get('https://www.tiktok.com', timeout=1)
+        except Exception:
+            # 如果客户端不可用，重新创建客户端
+            self.client_tiktok = create_client(
+                timeout=self.timeout,
+                proxy=self.proxy_tiktok,
+            )
 
     def __generate_folders(self):
         self.compatible()
@@ -1144,6 +1204,14 @@ class Parameter:
             ),
         )
         return ""
+
+    def __check_thread_count(self, thread_count: int) -> int:
+        return self.__check_number_value(
+            thread_count,
+            "thread_count",
+            1,
+            3,
+        )
 
     def __check_cookie_state(self, tiktok=False) -> bool:
         if tiktok:

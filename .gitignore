@@ -5,4 +5,9 @@ __pycache__/
 /.idea/
 /.run/
 /Volume/
+.trae/
+debug_*.py
+fix*.py
+test_*.py
+uv.lock
 !/.github/

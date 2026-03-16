@@ -28,7 +28,11 @@ dependencies = [
 Repository = "https://github.com/JoeanAmier/TikTokDownloader"
 
 [tool.uv.pip]
-index-url = "https://pypi.org/simple"
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+extra-index-url = [
+    "https://mirrors.aliyun.com/pypi/simple/",
+    "https://pypi.org/simple"
+]
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.

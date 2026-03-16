@@ -1,6 +1,8 @@
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.joinpath("Volume")
+# 使用当前运行目录作为项目根路径
+PROJECT_ROOT = Path.cwd() / "downloadspace"
+# 确保目录存在
 PROJECT_ROOT.mkdir(exist_ok=True)
 VERSION_MAJOR = 5
 VERSION_MINOR = 8
@@ -45,7 +47,7 @@ PHONE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
     "CriOS/125.0.6422.51 Mobile/15E148 Safari/604.1",
 }
-USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36"
+USERAGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0"
 BLANK_HEADERS = {
     "User-Agent": USERAGENT,
 }

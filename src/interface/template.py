@@ -90,6 +90,9 @@ class API:
 
     def set_temp_cookie(self, cookie: str = ""):
         if cookie:
+            from ..tools import cookie_dict_to_str
+            if isinstance(cookie, dict):
+                cookie = cookie_dict_to_str(cookie)
             self.headers["Cookie"] = cookie
 
     def generate_params(

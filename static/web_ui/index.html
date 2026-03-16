@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DouK-Downloader Web UI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="#home" class="nav-link active" data-target="home">首页</a></li>
+                <li><a href="#download" class="nav-link" data-target="download">链接下载</a></li>
+                <li><a href="#account" class="nav-link" data-target="account">账号管理</a></li>
+                <li><a href="#settings" class="nav-link" data-target="settings">下载设置</a></li>
+            </ul>
+        </nav>
+        
+        <main>
+            <section id="home" class="content-section active">
+                <h2>欢迎使用 DouK-Downloader</h2>
+                <p>这是 DouK-Downloader 的 Web UI 界面，您可以通过此界面轻松下载抖音和 TikTok 的视频、图集等内容。</p>
+                <div class="feature-cards">
+                    <div class="card">
+                        <h3>链接下载</h3>
+                        <p>直接输入抖音或 TikTok 链接，即可下载对应作品</p>
+                        <a href="#download" class="btn" data-target="download">开始下载</a>
+                    </div>
+                    <div class="card">
+                        <h3>账号管理</h3>
+                        <p>添加和管理抖音/TikTok 账号，批量下载账号作品</p>
+                        <a href="#account" class="btn" data-target="account">管理账号</a>
+                    </div>
+                    <div class="card">
+                        <h3>下载设置</h3>
+                        <p>自定义下载设置，包括保存路径、下载质量等</p>
+                        <a href="#settings" class="btn" data-target="settings">修改设置</a>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="download" class="content-section">
+                <h2>链接下载</h2>
+                <form id="download-form">
+                    <div class="form-group">
+                        <label for="link">输入抖音或 TikTok 链接（支持多行输入，每行一个链接）：</label>
+                        <textarea id="link" name="link" placeholder="https://www.douyin.com/video/1234567890\nhttps://www.douyin.com/video/0987654321" rows="10" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="platform">选择平台：</label>
+                        <select id="platform" name="platform">
+                            <option value="douyin">抖音</option>
+                            <option value="tiktok">TikTok</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="proxy">代理（可选）：</label>
+                        <input type="text" id="proxy" name="proxy" placeholder="http://127.0.0.1:7890">
+                    </div>
+                    <button type="submit" class="btn btn-primary">开始下载</button>
+                </form>
+                <div id="download-status" class="status-container">
+                    <h3>下载状态</h3>
+                    <div id="status-message"></div>
+                    <div id="progress-bar" class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="account" class="content-section">
+                <h2>账号管理</h2>
+                <div class="account-actions">
+                    <h3>添加账号</h3>
+                    <form id="add-account-form">
+                        <div class="form-group">
+                            <label for="add-platform">平台：</label>
+                            <select id="add-platform" name="platform">
+                                <option value="douyin">抖音</option>
+                                <option value="tiktok">TikTok</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="add-sec-user-id">用户主页链接或 Sec User ID（支持多行输入，每行一个账号）：</label>
+                            <textarea id="add-sec-user-id" name="sec_user_id" placeholder="例如：https://www.douyin.com/user/MS4wLjABAAAAFSp1EdCLJkoMieKaEVgSj2uoZpVw9ZDyymICRsuR3SQ\nhttps://www.tiktok.com/@username" rows="6" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">添加账号</button>
+                    </form>
+                    <div id="add-account-status" class="status-message"></div>
+                </div>
+                <div id="account-list">
+                    <h3>账号列表</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="account-table" style="table-layout: fixed; width: 100%;">
+                            <colgroup>
+                            <col style="width: 3em;">
+                            <col style="width: 3em;">
+                            <col style="width: 6em;">
+                            <col style="width: 6em;">
+                            <col style="width: 6em;">
+                        </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>平台</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">账号名称</th>
+                                    <th>操作</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">下载状态</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">主页地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="account-table-body">
+                                <!-- 账号列表将通过 JavaScript 动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="settings" class="content-section">
+                <h2>下载设置</h2>
+                <form id="settings-form">
+                    <div class="form-group">
+                        <label for="save-path">保存路径：</label>
+                        <input type="text" id="save-path" name="save-path" placeholder="默认保存路径">
+                    </div>
+                    <div class="form-group">
+                        <label for="download-quality">下载质量：</label>
+                        <select id="download-quality" name="download-quality">
+                            <option value="high">高画质</option>
+                            <option value="medium">中画质</option>
+                            <option value="low">低画质</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="thread-count">下载线程数：</label>
+                        <input type="number" id="thread-count" name="thread-count" min="1" max="10" value="3">
+                    </div>
+                    <div class="form-group">
+                        <label for="cookie-platform">Cookie 平台：</label>
+                        <select id="cookie-platform" name="cookie-platform">
+                            <option value="douyin">抖音</option>
+                            <option value="tiktok">TikTok</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="browser-select">选择浏览器：</label>
+                        <select id="browser-select" name="browser-select">
+                            <option value="Chrome">Chrome</option>
+                            <option value="Edge">Edge</option>
+                            <option value="Firefox">Firefox</option>
+                            <option value="Brave">Brave</option>
+                            <option value="Opera">Opera</option>
+                            <option value="Vivaldi">Vivaldi</option>
+                        </select>
+                    </div>
+                    <div class="form-group cookie-action">
+                        <button type="button" id="delete-cookie" class="btn btn-secondary">删除 Cookie</button>
+                        <button type="button" id="get-cookie" class="btn btn-primary">获取 Cookie</button>
+                        <span id="cookie-status" class="status-message"></span>
+                        <span class="cookie-hint">获取cookie就会保存，后续下载会用这个token</span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">保存设置</button>
+                </form>
+            </section>
+            
+
+        </main>
+        
+        <footer>
+            <p>&copy; 2026 DouK-Downloader. 开源项目，基于 GNU General Public License v3.0。</p>
+        </footer>
+    </div>
+    
+
+    
+    <script src="script.js"></script>
+</body>
+</html>

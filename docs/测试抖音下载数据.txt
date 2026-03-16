@@ -1,0 +1,15 @@
+
+视频链接
+https://www.douyin.com/video/7613327929544978289
+https://www.douyin.com/video/7608397257593003258
+https://www.douyin.com/video/7597356391107547456
+
+个人主页
+https://www.douyin.com/user/MS4wLjABAAAAoUnhufYDL5oXg_m3NgvE-TqeYyYvZ7Z70IDW-RxGZoB5G9GtnvzhNIoskL5JlMsd
+https://www.douyin.com/user/MS4wLjABAAAA7yt3MEYULOXDC3uPD-Bh63GXNHoYEBAskjT6arCkxdSN86dEqj3JJnhbai98rTCE
+https://www.douyin.com/user/MS4wLjABAAAAa-mFk_hgvxsODasmQHW3jUDJ9TDcNqwtzYe5LrHLkqrPxd101bQFY6AawN2pjYrm
+
+http://127.0.0.1:5555/web 
+
+python main.py --web-ui
+python start_web.py

@@ -77,6 +77,7 @@ class Extractor:
         self.log = params.logger
         self.date_format = params.date_format
         self.cleaner = params.CLEANER
+        self.download_quality = params.download_quality
         self.type = {
             "batch": self.__batch,
             "detail": self.__detail,
@@ -533,14 +534,24 @@ class Extractor:
                     x[2],
                 ),
             )
+            # 根据下载质量选择视频
+            if not bit_rate:
+                return (-1, -1, "")
+            
+            if self.download_quality == "low":
+                # 选择最低质量
+                selected = bit_rate[0]
+            elif self.download_quality == "medium":
+                # 选择中等质量
+                selected = bit_rate[len(bit_rate) // 2]
+            else:  # high
+                # 选择最高质量
+                selected = bit_rate[-1]
+            
             return (
-                (
-                    bit_rate[-1][-3],
-                    bit_rate[-1][-2],
-                    bit_rate[-1][-1][VIDEO_INDEX],
-                )
-                if bit_rate
-                else (-1, -1, "")
+                selected[-3],
+                selected[-2],
+                selected[-1][VIDEO_INDEX],
             )
         except AttributeError:
             self.log.error(
@@ -622,14 +633,24 @@ class Extractor:
                     x[1],
                 ),
             )
+            # 根据下载质量选择视频
+            if not bitrate_info:
+                return (-1, -1, "")
+            
+            if self.download_quality == "low":
+                # 选择最低质量
+                selected = bitrate_info[0]
+            elif self.download_quality == "medium":
+                # 选择中等质量
+                selected = bitrate_info[len(bitrate_info) // 2]
+            else:  # high
+                # 选择最高质量
+                selected = bitrate_info[-1]
+            
             return (
-                (
-                    bitrate_info[-1][-3],
-                    bitrate_info[-1][-2],
-                    bitrate_info[-1][-1][VIDEO_TIKTOK_INDEX],
-                )
-                if bitrate_info
-                else (-1, -1, "")
+                selected[-3],
+                selected[-2],
+                selected[-1][VIDEO_TIKTOK_INDEX],
             )
         except AttributeError:
             self.log.error(

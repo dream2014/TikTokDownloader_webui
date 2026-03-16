@@ -117,7 +117,8 @@ class TikTokDownloader:
             (_("终端交互模式"), self.complete),
             (_("后台监听模式"), self.monitor),
             (_("Web API 模式"), self.server),
-            (_("Web UI 模式"), self.disable_function),
+            (_("Web UI 模式"), self.web_ui),
+            # (_("Web UI 模式"), self.disable_function),
             # (_("Web API 模式"), self.__api_object),
             # (_("Web UI 模式"), self.__web_ui_object),
             (
@@ -147,6 +148,29 @@ class TikTokDownloader:
             self.console.print(
                 _(
                     "访问 http://127.0.0.1:5555/docs 或者 http://127.0.0.1:5555/redoc 可以查阅 API 模式说明文档！"
+                ),
+                highlight=True,
+            )
+            await APIServer(
+                self.parameter,
+                self.database,
+            ).run_server(
+                SERVER_HOST,
+                SERVER_PORT,
+            )
+        except KeyboardInterrupt:
+            self.running = False
+
+    async def web_ui(self):
+        try:
+            # 确保 logger 和 parameter 属性已经初始化
+            if not self.logger:
+                self.check_config()
+            if not self.parameter:
+                await self.check_settings(False)
+            self.console.print(
+                _(
+                    "访问 http://127.0.0.1:5555/web 可以使用 Web UI 界面！"
                 ),
                 highlight=True,
             )

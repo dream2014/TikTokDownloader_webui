@@ -42,7 +42,6 @@ __all__ = ["Downloader"]
 
 
 class Downloader:
-    semaphore = Semaphore(MAX_WORKERS)
     CONTENT_TYPE_MAP = {
         "image/png": "png",
         "image/jpeg": "jpeg",
@@ -89,6 +88,9 @@ class Downloader:
         self.ffmpeg = params.ffmpeg
         self.cache = params.cache
         self.truncate = params.truncate
+        self.download_quality = params.download_quality
+        self.thread_count = params.thread_count
+        self.semaphore = Semaphore(self.thread_count)
         self.general_progress_object: Callable = self.init_general_progress(
             server_mode,
         )
@@ -153,19 +155,21 @@ class Downloader:
         type_: str,
         tiktok=False,
         **kwargs,
-    ) -> None:
+    ) -> bool:
         if not self.download or not data:
-            return
+            return False
         self.log.info(_("开始下载作品文件"))
         match type_:
             case "batch":
-                await self.run_batch(data, tiktok, **kwargs)
+                return await self.run_batch(data, tiktok, **kwargs)
             case "detail":
-                await self.run_general(data, tiktok, **kwargs)
+                return await self.run_general(data, tiktok, **kwargs)
             case "music":
                 await self.run_music(data, **kwargs)
+                return True
             case "live":
                 await self.run_live(data, tiktok, **kwargs)
+                return True
             case _:
                 raise ValueError
 
@@ -181,7 +185,7 @@ class Downloader:
         mix_title: str = "",
         collect_id: str = "",
         collect_name: str = "",
-    ):
+    ) -> bool:
         root = self.storage_folder(
             mode,
             *self.data_classification(
@@ -195,15 +199,15 @@ class Downloader:
                 collect_name,
             ),
         )
-        await self.batch_processing(
+        return await self.batch_processing(
             data,
             root,
             tiktok=tiktok,
         )
 
-    async def run_general(self, data: list[dict], tiktok: bool, **kwargs):
+    async def run_general(self, data: list[dict], tiktok: bool, **kwargs) -> bool:
         root = self.storage_folder(mode="detail")
-        await self.batch_processing(
+        return await self.batch_processing(
             data,
             root,
             tiktok=tiktok,
@@ -288,7 +292,7 @@ class Downloader:
             self.headers["User-Agent"],
         )
 
-    async def batch_processing(self, data: list[dict], root: Path, **kwargs):
+    async def batch_processing(self, data: list[dict], root: Path, **kwargs) -> bool:
         count = SimpleNamespace(
             downloaded_image=set(),
             skipped_image=set(),
@@ -304,10 +308,13 @@ class Downloader:
                 self.desc_length,
             )
             name = self.generate_detail_name(item)
+            # 图集作品自动启用按文件夹归档功能
+            is_image_set = (item["type"] == _("图集"))
+            use_folder_mode = self.folder_mode or is_image_set
             temp_root, actual_root = self.deal_folder_path(
                 root,
                 name,
-                self.folder_mode,
+                use_folder_mode,
             )
             params = {
                 "tasks": tasks,
@@ -343,10 +350,25 @@ class Downloader:
                 type=_("音乐"),
             )
             self.download_cover(**params)
-        await self.downloader_chart(
+        if not tasks:
+            # 检查是否有跳过的文件，如果有，返回 True
+            if any([
+                count.skipped_image,
+                count.skipped_video,
+                count.skipped_live
+            ]):
+                return True
+            return False
+        results = await self.downloader_chart(
             tasks, count, self.general_progress_object(), **kwargs
         )
         self.statistics_count(count)
+        # 检查是否有成功的下载或跳过的文件
+        return any(results) or any([
+            count.skipped_image,
+            count.skipped_video,
+            count.skipped_live
+        ])
 
     async def downloader_chart(
         self,
@@ -355,7 +377,7 @@ class Downloader:
         progress: Progress,
         semaphore: Semaphore = None,
         **kwargs,
-    ):
+    ) -> list[bool]:
         with progress:
             tasks = [
                 self.request_file(
@@ -367,7 +389,7 @@ class Downloader:
                 )
                 for task in tasks
             ]
-            await gather(*tasks)
+            return await gather(*tasks)
 
     def deal_folder_path(
         self,
@@ -390,7 +412,11 @@ class Downloader:
         return path.exists()
 
     async def is_skip(self, id_: str, path: Path) -> bool:
-        return await self.is_downloaded(id_) or self.is_exists(path)
+        # 只有当数据库中有记录且文件确实存在时才跳过下载
+        if await self.is_downloaded(id_):
+            # 如果数据库中有记录但文件不存在，应该重新下载
+            return self.is_exists(path)
+        return False
 
     async def download_image(
         self,
@@ -416,13 +442,22 @@ class Downloader:
             start=1,
         ):
             if await self.is_downloaded(id_):
-                skipped.add(id_)
-                self.log.info(
-                    _("【{type}】{name} 存在下载记录，跳过下载").format(
-                        type=type_, name=name
+                # 检查文件是否真的存在
+                if self.is_exists(p := actual_root.with_name(f"{name}_{index}.{suffix}")):
+                    skipped.add(id_)
+                    self.log.info(
+                        _("【{type}】{name} 存在下载记录且文件已存在，跳过下载").format(
+                            type=type_, name=name
+                        )
                     )
-                )
-                break
+                    break
+                else:
+                    # 文件不存在，继续下载
+                    self.log.info(
+                        _("【{type}】{name} 存在下载记录但文件不存在，重新下载").format(
+                            type=type_, name=name
+                        )
+                    )
             elif self.is_exists(p := actual_root.with_name(f"{name}_{index}.{suffix}")):
                 self.log.info(
                     _("【{type}】{name}_{index} 文件已存在，跳过下载").format(
@@ -476,6 +511,9 @@ class Downloader:
             self.log.info(f"文件路径: {p.resolve()}", False)
             skipped.add(id_)
             return
+        # 确保downloads是列表
+        if isinstance(item["downloads"], str):
+            item["downloads"] = [item["downloads"]]
         tasks.append(
             (
                 item["downloads"],
@@ -596,92 +634,110 @@ class Downloader:
         unknown_size=False,
         semaphore: Semaphore = None,
     ) -> bool | None:
-        async with semaphore or self.semaphore:
-            client = self.client_tiktok if tiktok else self.client
-            headers = self.__adapter_headers(
-                headers,
-                tiktok,
-            )
-            self.__record_request_messages(
-                show,
-                url,
-                headers,
-            )
-            try:
-                # length, suffix = await self.__head_file(client, url, headers, suffix, )
-                position = self.__update_headers_range(
+        # 处理下载链接列表
+        urls = url if isinstance(url, list) else [url]
+        
+        for i, current_url in enumerate(urls):
+            async with semaphore or self.semaphore:
+                client = self.client_tiktok if tiktok else self.client
+                headers = self.__adapter_headers(
                     headers,
-                    temp,
+                    tiktok,
                 )
-                async with client.stream(
-                    "GET",
-                    url,
-                    headers=headers,
-                ) as response:
-                    if response.status_code == 416:
-                        raise CacheError(_("文件缓存异常，尝试重新下载"))
-                    response.raise_for_status()
-                    length, suffix = self._extract_content(
-                        response.headers,
-                        suffix,
+                self.__record_request_messages(
+                    show,
+                    current_url,
+                    headers,
+                )
+                try:
+                    # length, suffix = await self.__head_file(client, url, headers, suffix, )
+                    position = self.__update_headers_range(
+                        headers,
+                        temp,
                     )
-                    length += position
-                    self._record_response(
-                        response,
-                        show,
-                        length,
+                    async with client.stream(
+                        "GET",
+                        current_url,
+                        headers=headers,
+                    ) as response:
+                        if response.status_code == 416:
+                            raise CacheError(_("文件缓存异常，尝试重新下载"))
+                        response.raise_for_status()
+                        length, suffix = self._extract_content(
+                            response.headers,
+                            suffix,
+                        )
+                        length += position
+                        self._record_response(
+                            response,
+                            show,
+                            length,
+                        )
+                        match self._download_initial_check(
+                            length,
+                            unknown_size,
+                            show,
+                        ):
+                            case 1:
+                                return await self.download_file(
+                                    temp,
+                                    actual.with_suffix(
+                                        f".{suffix}",
+                                    ),
+                                    show,
+                                    id_,
+                                    response,
+                                    length,
+                                    position,
+                                    count,
+                                    progress,
+                                )
+                            case 0:
+                                return True
+                            case -1:
+                                return False
+                            case _:
+                                raise DownloaderError
+                except RequestError as e:
+                    self.log.warning(_("网络异常: {error_repr}").format(error_repr=repr(e)))
+                    if i < len(urls) - 1:
+                        self.log.info(_("尝试使用下一个下载链接..."))
+                        continue
+                    return False
+                except HTTPStatusError as e:
+                    self.log.warning(
+                        _("响应码异常: {error_repr}").format(error_repr=repr(e))
                     )
-                    match self._download_initial_check(
-                        length,
-                        unknown_size,
-                        show,
-                    ):
-                        case 1:
-                            return await self.download_file(
-                                temp,
-                                actual.with_suffix(
-                                    f".{suffix}",
-                                ),
-                                show,
-                                id_,
-                                response,
-                                length,
-                                position,
-                                count,
-                                progress,
-                            )
-                        case 0:
-                            return True
-                        case -1:
-                            return False
-                        case _:
-                            raise DownloaderError
-            except RequestError as e:
-                self.log.warning(_("网络异常: {error_repr}").format(error_repr=repr(e)))
-                return False
-            except HTTPStatusError as e:
-                self.log.warning(
-                    _("响应码异常: {error_repr}").format(error_repr=repr(e))
-                )
-                self.console.warning(
-                    _(
-                        "如果 TikTok 平台作品下载功能异常，请检查配置文件中 browser_info_tiktok 的 device_id 参数！"
-                    ),
-                )
-                return False
-            except CacheError as e:
-                self.delete(temp)
-                self.log.error(str(e))
-                return False
-            except Exception as e:
-                self.log.error(
-                    _(
-                        "下载文件时发生预期之外的错误，请向作者反馈，错误信息: {error}"
-                    ).format(error=repr(e)),
-                )
-                self.log.error(f"URL: {url}", False)
-                self.log.error(f"Headers: {headers}", False)
-                return False
+                    if tiktok:
+                        self.console.warning(
+                            _(
+                                "如果 TikTok 平台作品下载功能异常，请检查配置文件中 browser_info_tiktok 的 device_id 参数！"
+                            ),
+                        )
+                    if i < len(urls) - 1:
+                        self.log.info(_("尝试使用下一个下载链接..."))
+                        continue
+                    return False
+                except CacheError as e:
+                    self.delete(temp)
+                    self.log.error(str(e))
+                    if i < len(urls) - 1:
+                        self.log.info(_("尝试使用下一个下载链接..."))
+                        continue
+                    return False
+                except Exception as e:
+                    self.log.error(
+                        _(
+                            "下载文件时发生预期之外的错误，请向作者反馈，错误信息: {error}"
+                        ).format(error=repr(e)),
+                    )
+                    self.log.error(f"URL: {current_url}", False)
+                    self.log.error(f"Headers: {headers}", False)
+                    if i < len(urls) - 1:
+                        self.log.info(_("尝试使用下一个下载链接..."))
+                        continue
+                    return False
+        return False
 
     async def download_file(
         self,

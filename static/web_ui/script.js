@@ -607,7 +607,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/download', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'token': 'test'
             },
             body: JSON.stringify({
                 link: link, // 保留原始链接，后端可以处理多条链接
@@ -748,6 +749,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 获取Cookie功能
     const getCookieBtn = document.getElementById('get-cookie');
     const deleteCookieBtn = document.getElementById('delete-cookie');
+    const saveCookieBtn = document.getElementById('save-cookie');
     const cookieStatus = document.getElementById('cookie-status');
     const cookiePlatform = document.getElementById('cookie-platform');
     const browserSelect = document.getElementById('browser-select');
@@ -768,7 +770,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/get-cookie', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'token': 'test'
             },
             body: JSON.stringify({
                 platform: platform,
@@ -807,7 +810,8 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/delete-cookie', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'token': 'test'
             },
             body: JSON.stringify({
                 platform: platform
@@ -825,6 +829,47 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .catch(error => {
             cookieStatus.textContent = `Cookie删除失败：${error.message}`;
+            cookieStatus.className = 'status-message error';
+        });
+    });
+    
+    // 保存Cookie功能
+    saveCookieBtn.addEventListener('click', function() {
+        // 清除之前的状态
+        cookieStatus.textContent = '';
+        cookieStatus.className = 'status-message';
+        
+        // 获取选择的平台和浏览器
+        const platform = cookiePlatform.value;
+        const browser = browserSelect.value;
+        
+        // 显示保存Cookie的过程
+        cookieStatus.textContent = '正在获取并保存Cookie...';
+        
+        // 调用后端API保存Cookie
+        fetch('/save-cookie', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'token': 'test'
+            },
+            body: JSON.stringify({
+                platform: platform,
+                browser: browser
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.message && data.message.includes('成功')) {
+                cookieStatus.textContent = 'Cookie保存成功！';
+                cookieStatus.className = 'status-message success';
+            } else {
+                cookieStatus.textContent = `Cookie保存失败：${data && data.message ? data.message : '未知错误'}`;
+                cookieStatus.className = 'status-message error';
+            }
+        })
+        .catch(error => {
+            cookieStatus.textContent = `Cookie保存失败：${error.message}`;
             cookieStatus.className = 'status-message error';
         });
     });

@@ -949,6 +949,76 @@ class APIServer(TikTok):
                     params={"platform": platform},
                 )
 
+        @self.server.post(
+            "/save-cookie",
+            summary=_('保存Cookie到txt文件'),
+            description=_('''**参数**:
+
+                - **platform**: 平台，可选值：douyin, tiktok；必需参数
+                - **browser**: 浏览器名称；必需参数
+                '''),
+            tags=[_('Cookie')],
+            response_model=DataResponse,
+        )
+        async def handle_save_cookie(
+            request: dict, token: str = Depends(token_dependency)
+        ):
+            platform = request.get('platform')
+            browser = request.get('browser')
+            try:
+                # 导入必要的模块
+                from ..module import Cookie
+                from ..tools import Browser
+                import os
+                from pathlib import Path
+                
+                # 初始化Cookie和Browser对象
+                cookie_object = Cookie(self.parameter.settings, self.console)
+                browser_object = Browser(self.parameter, cookie_object)
+                
+                # 确定是否为TikTok平台
+                tiktok = platform == "tiktok"
+                
+                # 从浏览器获取Cookie
+                cookie = browser_object.get(browser, browser_object.PLATFORM[tiktok].domain)
+                
+                if cookie:
+                    # 保存Cookie到配置文件
+                    browser_object._Browser__save_cookie(cookie, tiktok)
+                    # 更新内存中的Cookie
+                    settings_data = self.parameter.get_settings_data()
+                    if tiktok:
+                        self.parameter.set_cookie(settings_data.get("cookie", None), cookie)
+                    else:
+                        self.parameter.set_cookie(cookie, settings_data.get("cookie_tiktok", None))
+                    
+                    # 保存Cookie到txt文件
+                    cookie_dir = Path(self.parameter.ROOT)
+                    cookie_dir.mkdir(exist_ok=True)
+                    cookie_file = cookie_dir / f"cookie_{platform}.txt"
+                    # 将cookie字典转换为字符串格式
+                    cookie_str = '; '.join([f"{k}={v}" for k, v in cookie.items()])
+                    with open(cookie_file, "w", encoding="utf-8") as f:
+                        f.write(cookie_str)
+                    
+                    return DataResponse(
+                        message=_('Cookie保存成功！'),
+                        data=None,
+                        params={"platform": platform, "browser": browser},
+                    )
+                else:
+                    return DataResponse(
+                        message=_('Cookie获取失败：未找到对应的Cookie数据'),
+                        data=None,
+                        params={"platform": platform, "browser": browser},
+                    )
+            except Exception as e:
+                return DataResponse(
+                    message=_('Cookie保存失败：{error}').format(error=str(e)),
+                    data=None,
+                    params={"platform": platform, "browser": browser},
+                )
+
         @self.server.get(
             "/accounts",
             summary=_('获取账号列表'),

@@ -5,9 +5,11 @@ __pycache__/
 /.idea/
 /.run/
 /Volume/
+/downloadspace/
 .trae/
 debug_*.py
 fix*.py
 test_*.py
 uv.lock
 !/.github/
+docs/测试抖音下载数据.txt

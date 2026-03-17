@@ -6,6 +6,8 @@ __pycache__/
 /.run/
 /Volume/
 /downloadspace/
+/dist/
+/build/
 .trae/
 debug_*.py
 fix*.py

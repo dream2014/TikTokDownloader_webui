@@ -45,5 +45,5 @@ executable = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='static/images/DouK-Downloader.ico'
+    icon='static/images/douyin_downloader.ico'
 )

@@ -728,6 +728,13 @@ class APIServer(TikTok):
             platform = request.get('platform')
             proxy = request.get('proxy')
             try:
+                # 检查参数
+                if not link or not platform:
+                    return DataResponse(
+                        message=_('链接和平台参数不能为空！'),
+                        data=None,
+                        params={"link": link, "platform": platform, "proxy": proxy},
+                    )
                 # 处理多条链接（按换行分隔）
                 links = link.split('\n')
                 detail_ids = []
@@ -752,17 +759,20 @@ class APIServer(TikTok):
                             # 尝试匹配图片合集链接（抖音）
                             match = re.search(r"note/(\d+)", url)
                             if not match:
-                                # 尝试匹配图片合集链接（TikTok）
-                                match = re.search(r"photo/(\d+)", url)
+                                # 尝试匹配文章链接（抖音）
+                                match = re.search(r"article/(\d+)", url)
                                 if not match:
-                                    # 尝试匹配其他可能的链接格式
-                                    match = re.search(r"aweme/(\d+)", url)
+                                    # 尝试匹配图片合集链接（TikTok）
+                                    match = re.search(r"photo/(\d+)", url)
                                     if not match:
-                                        return DataResponse(
-                                            message=_('无法从链接中提取作品ID！'),
-                                            data=None,
-                                            params={"link": link, "platform": platform, "proxy": proxy},
-                                        )
+                                        # 尝试匹配其他可能的链接格式
+                                        match = re.search(r"aweme/(\d+)", url)
+                                        if not match:
+                                            return DataResponse(
+                                                message=_('无法从链接中提取作品ID！'),
+                                                data=None,
+                                                params={"link": link, "platform": platform, "proxy": proxy},
+                                            )
                         detail_id = match.group(1)
                         detail_ids.append(detail_id)
                     elif platform == "tiktok":
@@ -779,17 +789,20 @@ class APIServer(TikTok):
                             # 尝试匹配图片合集链接（抖音）
                             match = re.search(r"note/(\d+)", url)
                             if not match:
-                                # 尝试匹配图片合集链接（TikTok）
-                                match = re.search(r"photo/(\d+)", url)
+                                # 尝试匹配文章链接（抖音）
+                                match = re.search(r"article/(\d+)", url)
                                 if not match:
-                                    # 尝试匹配其他可能的链接格式
-                                    match = re.search(r"aweme/(\d+)", url)
+                                    # 尝试匹配图片合集链接（TikTok）
+                                    match = re.search(r"photo/(\d+)", url)
                                     if not match:
-                                        return DataResponse(
-                                            message=_('无法从链接中提取作品ID！'),
-                                            data=None,
-                                            params={"link": link, "platform": platform, "proxy": proxy},
-                                        )
+                                        # 尝试匹配其他可能的链接格式
+                                        match = re.search(r"aweme/(\d+)", url)
+                                        if not match:
+                                            return DataResponse(
+                                                message=_('无法从链接中提取作品ID！'),
+                                                data=None,
+                                                params={"link": link, "platform": platform, "proxy": proxy},
+                                            )
                         detail_id = match.group(1)
                         detail_ids.append(detail_id)
                     else:

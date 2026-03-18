@@ -333,16 +333,68 @@ class Downloader:
             elif t == _("视频"):
                 await self.download_video(
                     **params,
-                    type_=_("视频"),
+                    type_=_('视频'),
                     skipped=count.skipped_video,
                 )
             elif t == _("实况"):
                 await self.download_image(
                     suffix="mp4",
-                    type_=_("实况"),
+                    type_=_('实况'),
                     **params,
                     skipped=count.skipped_live,
                 )
+            elif t == _("文章"):
+                # 文章类型的内容，检查是否有视频或图片
+                if item.get("downloads"):
+                    # 文章中包含视频
+                    await self.download_video(
+                        **params,
+                        type_=_("文章"),
+                        skipped=count.skipped_video,
+                    )
+                else:
+                    # 纯文章内容，保存文章文本
+                    self.log.info(
+                        _("【{type}】{name} 为纯文章内容，保存文章文本").format(
+                            type=t, name=name
+                        )
+                    )
+                    # 保存文章内容到文件
+                    article_content = item.get("article_content", "")
+                    self.log.info(f"文章内容长度: {len(article_content)} 字符", False)
+                    self.log.info(f"保存路径: {actual_root.resolve()}", False)
+                    if article_content:
+                        article_file = actual_root.with_name(f"{name}.txt")
+                        self.log.info(f"文章文件路径: {article_file.resolve()}", False)
+                        try:
+                            # 确保目录存在
+                            article_file.parent.mkdir(parents=True, exist_ok=True)
+                            # 使用同步的 open 函数，而不是 aiofiles 的 open
+                            import builtins
+                            # 构建文章内容，标题在前，内容在后，用----分隔
+                            full_content = f"{name}\n\n----\n\n{article_content}"
+                            with builtins.open(article_file, "w", encoding="utf-8") as f:
+                                f.write(full_content)
+                            self.log.info(
+                                _("【{type}】{name} 文章内容保存成功").format(
+                                    type=t, name=name
+                                )
+                            )
+                            self.log.info(f"文件路径: {article_file.resolve()}", False)
+                        except Exception as e:
+                            self.log.error(
+                                _("【{type}】{name} 文章内容保存失败: {error}").format(
+                                    type=t, name=name, error=e
+                                )
+                            )
+                            import traceback
+                            self.log.error(f"错误详情: {traceback.format_exc()}", False)
+                    else:
+                        self.log.info(_("【{type}】{name} 文章内容为空，跳过保存").format(
+                            type=t, name=name
+                        ))
+                    # 纯文章内容，虽然没有可下载的媒体文件，但处理成功
+                    count.skipped_video.add(item["id"])
             else:
                 raise DownloaderError
             self.download_music(

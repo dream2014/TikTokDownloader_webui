@@ -345,6 +345,70 @@ class Extractor:
         # 作品分类
         if images := self.safe_extract(data, "images"):
             self.__extract_image_info(item, data, images)
+        elif article := self.safe_extract(data, "article_info"):
+            # 处理文章类型的内容
+            self.__set_blank_data(
+                item,
+                data,
+                _("文章"),
+            )
+            # 提取文章内容
+            # 尝试不同的路径提取文章内容
+            item["article_content"] = self.safe_extract(article, "article_content")
+            if not item["article_content"]:
+                item["article_content"] = self.safe_extract(article, "content")
+            if not item["article_content"]:
+                item["article_content"] = self.safe_extract(article, "content.content")
+            if not item["article_content"]:
+                item["article_content"] = self.safe_extract(data, "article_info.article_content")
+            if not item["article_content"]:
+                item["article_content"] = self.safe_extract(data, "article_info.content")
+            if not item["article_content"]:
+                # 尝试从其他字段提取内容
+                item["article_content"] = self.safe_extract(article, "article_title")
+                if item["article_content"]:
+                    # 如果有标题，添加一个换行符
+                    item["article_content"] += "\n\n"
+                # 添加描述
+                desc = self.safe_extract(data, "desc")
+                if desc:
+                    item["article_content"] += desc
+            # 记录文章信息的类型和属性，以便调试
+            print(f"文章信息类型: {type(article)}")
+            self.log.info(f"文章信息类型: {type(article)}", False)
+            if hasattr(article, "__dict__"):
+                print(f"文章信息属性: {list(article.__dict__.keys())}")
+                self.log.info(f"文章信息属性: {list(article.__dict__.keys())}", False)
+                # 记录文章信息的详细内容
+                for key, value in article.__dict__.items():
+                    print(f"文章信息[{key}]: {value}")
+                    self.log.info(f"文章信息[{key}]: {value}", False)
+            # 也记录整个 data 对象的属性，以便了解完整结构
+            print(f"data 对象属性: {list(data.__dict__.keys())}")
+            self.log.info(f"data 对象属性: {list(data.__dict__.keys())}", False)
+            # 记录文章内容提取情况
+            if item["article_content"]:
+                self.log.info(f"文章内容提取成功，长度: {len(item['article_content'])} 字符", False)
+            else:
+                self.log.info("文章内容提取失败，内容为空", False)
+            # 尝试提取文章中的视频或图片
+            if video := self.safe_extract(data, "video"):
+                # 文章中包含视频
+                item["height"], item["width"], item["downloads"] = (
+                    self.__extract_video_download(
+                        data,
+                    )
+                )
+                item["duration"] = self.time_conversion(
+                    self.safe_extract(data, "video.duration", 0)
+                )
+                item["uri"] = self.safe_extract(data, "video.play_addr.uri")
+                self.__extract_cover(item, data, True)
+            else:
+                # 纯文章内容，没有可下载的媒体文件
+                item["downloads"] = ""
+                item["duration"] = "00:00:00"
+                item["uri"] = ""
         else:
             self.__extract_video_info(
                 item,

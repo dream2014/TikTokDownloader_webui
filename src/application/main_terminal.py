@@ -1098,6 +1098,9 @@ class TikTok:
             return data["downloads"][0]
         elif data["type"] == _("视频"):
             return data["static_cover"]
+        elif data["type"] == _("文章"):
+            # 文章类型的内容，返回一个非空字符串表示处理成功
+            return "文章内容处理成功"
         return ""
 
     def _choice_live_quality(

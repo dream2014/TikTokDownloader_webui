@@ -21,6 +21,8 @@ async def start_server():
             print(f"服务器启动失败: {e}")
             import traceback
             traceback.print_exc()
+            print("请查看上面的错误信息，按任意键退出...")
+            input()
 
 def check_server_ready(port=5555, timeout=30):
     """检查服务器是否在指定端口上启动"""

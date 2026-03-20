@@ -373,6 +373,23 @@ class Extractor:
                 desc = self.safe_extract(data, "desc")
                 if desc:
                     item["article_content"] += desc
+            
+            # 预处理文章内容，处理换行符、大括号和空行问题
+            if item["article_content"]:
+                # 替换转义的换行符为实际换行
+                item["article_content"] = item["article_content"].replace("\\n", "\n")
+                # 去除前后的大括号
+                if item["article_content"].startswith("{") and item["article_content"].endswith("}"):
+                    item["article_content"] = item["article_content"][1:-1]
+                # 去除前后的引号
+                item["article_content"] = item["article_content"].strip('"')
+                # 去除所有空行
+                lines = item["article_content"].split('\n')
+                cleaned_lines = []
+                for line in lines:
+                    if line.strip() != '':  # 只保留非空行
+                        cleaned_lines.append(line)
+                item["article_content"] = '\n'.join(cleaned_lines)
             # 记录文章信息的类型和属性，以便调试
             print(f"文章信息类型: {type(article)}")
             self.log.info(f"文章信息类型: {type(article)}", False)

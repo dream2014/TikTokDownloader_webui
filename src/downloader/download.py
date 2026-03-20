@@ -371,8 +371,8 @@ class Downloader:
                             article_file.parent.mkdir(parents=True, exist_ok=True)
                             # 使用同步的 open 函数，而不是 aiofiles 的 open
                             import builtins
-                            # 构建文章内容，标题在前，内容在后，用----分隔
-                            full_content = f"{name}\n\n----\n\n{article_content}"
+                            # 构建文章内容，使用markdown格式，标题在前，内容在后
+                            full_content = f"# {name}\n\n{article_content}"
                             with builtins.open(article_file, "w", encoding="utf-8") as f:
                                 f.write(full_content)
                             self.log.info(

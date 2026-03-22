@@ -107,9 +107,9 @@ class Settings(BaseModel):
         populate_by_name = True
         arbitrary_types_allowed = True
         json_encoders = {
-            AccountUrl: lambda v: v.dict(),
-            MixUrl: lambda v: v.dict(),
-            OwnerUrl: lambda v: v.dict(),
-            BrowserInfo: lambda v: v.dict(),
-            TikTokBrowserInfo: lambda v: v.dict(),
+            AccountUrl: lambda v: v.dict() if hasattr(v, 'dict') else v,
+            MixUrl: lambda v: v.dict() if hasattr(v, 'dict') else v,
+            OwnerUrl: lambda v: v.dict() if hasattr(v, 'dict') else v,
+            BrowserInfo: lambda v: v.dict() if hasattr(v, 'dict') else v,
+            TikTokBrowserInfo: lambda v: v.dict() if hasattr(v, 'dict') else v,
         }

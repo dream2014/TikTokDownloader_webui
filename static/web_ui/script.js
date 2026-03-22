@@ -164,7 +164,211 @@ document.addEventListener('DOMContentLoaded', function() {
     // 下载进度状态管理
     let downloadStatus = {};
     
-
+    // 合集列表数据
+    let collections = [];
+    
+    // 加载合集列表
+    function loadCollections() {
+        console.log('开始加载合集列表');
+        fetch('/collections', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'token': 'test'
+            }
+        })
+        .then(response => {
+            console.log('获取合集列表响应:', response);
+            return response.json();
+        })
+        .then(data => {
+            console.log('获取合集列表数据:', data);
+            if (data && data.message && data.message.includes('成功')) {
+                console.log('合集数据:', data.data);
+                collections = data.data;
+                renderCollections(collections);
+            } else {
+                console.error('加载合集列表失败:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('加载合集列表失败:', error);
+        });
+    }
+    
+    // 渲染合集列表
+    function renderCollections(collections) {
+        console.log('开始渲染合集列表，数据长度:', collections.length);
+        console.log('合集数据详情:', collections);
+        const tableBody = document.getElementById('collection-table-body');
+        console.log('获取表格体元素:', tableBody);
+        tableBody.innerHTML = '';
+        
+        collections.forEach(collection => {
+            console.log('渲染单个合集:', collection);
+            // 获取下载状态
+            const status = downloadStatus[collection.id] || '空闲';
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${collection.platform === 'douyin' ? '抖音' : 'TikTok'}</td>
+                <td>${collection.username}</td>
+                <td>
+                    <button class="btn btn-danger delete-collection-btn" data-id="${collection.id}">删除</button>
+                    <button class="btn btn-primary download-collection-btn" data-id="${collection.id}">下载合集</button>
+                </td>
+                <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" class="collection-download-status" data-id="${collection.id}">${status}</td>
+                <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><a href="${collection.url}" target="_blank" title="${collection.url}">${collection.url}</a></td>
+            `;
+            
+            tableBody.appendChild(row);
+        });
+        
+        // 添加事件监听器
+        addCollectionEventListeners();
+        console.log('合集列表渲染完成');
+    }
+    
+    // 添加合集事件监听器
+    function addCollectionEventListeners() {
+        // 删除按钮事件
+        document.querySelectorAll('.delete-collection-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const collectionId = this.getAttribute('data-id');
+                deleteCollection(collectionId);
+            });
+        });
+        
+        // 下载按钮事件
+        document.querySelectorAll('.download-collection-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const collectionId = this.getAttribute('data-id');
+                downloadCollection(collectionId);
+            });
+        });
+    }
+    
+    // 删除合集
+    function deleteCollection(collectionId) {
+        if (confirm('确定要删除这个合集吗？')) {
+            fetch(`/collections/${collectionId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'token': 'test'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.message && data.message.includes('成功')) {
+                    // 重新加载合集列表
+                    loadCollections();
+                } else {
+                    console.error('删除合集失败:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('删除合集失败:', error);
+            });
+        }
+    }
+    
+    // 下载合集
+    function downloadCollection(collectionId) {
+        // 清除之前可能存在的计时器
+        clearInterval(window[`listProgressInterval_${collectionId}`]);
+        clearInterval(window[`downloadProgressInterval_${collectionId}`]);
+        
+        // 更新下载状态为开始下载
+        updateCollectionDownloadStatus(collectionId, '开始下载');
+        
+        // 开始获取作品列表
+        updateCollectionDownloadStatus(collectionId, '作品列表0%');
+        
+        // 模拟获取作品列表的进度
+        let listProgress = 0;
+        window[`listProgressInterval_${collectionId}`] = setInterval(() => {
+            listProgress += 5;
+            if (listProgress <= 100) {
+                updateCollectionDownloadStatus(collectionId, `作品列表${listProgress}%`);
+            } else {
+                clearInterval(window[`listProgressInterval_${collectionId}`]);
+            }
+        }, 100);
+        
+        // 发送下载请求
+        fetch(`/collections/${collectionId}/download`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'token': 'test'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // 清除获取作品列表的进度计时器
+            clearInterval(window[`listProgressInterval_${collectionId}`]);
+            
+            if (data && data.message && data.message.includes('成功')) {
+                // 开始显示真实的下载进度
+                let completedVideos = 0;
+                const totalVideos = data.data.total_videos || 0;
+                updateCollectionDownloadStatus(collectionId, `完成0/${totalVideos}个`);
+                
+                // 模拟下载进度，实时更新
+                window[`downloadProgressInterval_${collectionId}`] = setInterval(() => {
+                    completedVideos += 1;
+                    if (completedVideos <= totalVideos) {
+                        updateCollectionDownloadStatus(collectionId, `完成${completedVideos}/${totalVideos}个`);
+                    } else {
+                        clearInterval(window[`downloadProgressInterval_${collectionId}`]);
+                        // 更新下载状态为完成（绿色）
+                        updateCollectionDownloadStatus(collectionId, '完成', true);
+                    }
+                }, 500);
+                
+                // 显示成功提示
+                statusMessage.textContent = `合集下载成功！文件保存到：${data.data.save_path}`;
+                statusMessage.style.color = '#4CAF50';
+            } else {
+                // 清除获取作品列表的进度计时器
+                clearInterval(window[`listProgressInterval_${collectionId}`]);
+                // 更新下载状态为失败
+                updateCollectionDownloadStatus(collectionId, '下载失败');
+                // 显示失败提示
+                statusMessage.textContent = data.message || '合集下载失败：未知错误';
+                statusMessage.style.color = '#dc3545';
+            }
+        })
+        .catch(error => {
+            // 清除获取作品列表的进度计时器
+            clearInterval(window[`listProgressInterval_${collectionId}`]);
+            // 更新下载状态为失败
+            updateCollectionDownloadStatus(collectionId, '下载失败');
+            // 显示失败提示
+            statusMessage.textContent = '合集下载失败：' + error.message;
+            statusMessage.style.color = '#dc3545';
+        });
+    }
+    
+    // 更新合集下载状态
+    function updateCollectionDownloadStatus(collectionId, status, isCompleted = false) {
+        downloadStatus[collectionId] = status;
+        // 更新页面显示
+        const statusElement = document.querySelector(`.collection-download-status[data-id="${collectionId}"]`);
+        if (statusElement) {
+            statusElement.textContent = status;
+            // 如果是完成状态，设置为绿色
+            if (isCompleted) {
+                statusElement.style.color = '#4CAF50';
+                statusElement.style.fontWeight = 'bold';
+            } else {
+                // 其他状态使用默认颜色
+                statusElement.style.color = '';
+                statusElement.style.fontWeight = '';
+            }
+        }
+    }
     
     // 渲染账号列表
     function renderAccounts(accounts) {
@@ -624,6 +828,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data && data.message && data.message.includes('成功')) {
                 statusMessage.textContent = `下载成功！文件保存到：${data.data ? data.data.save_path : '未知路径'}`;
                 statusMessage.style.color = '#4CAF50';
+                
+                // 如果是合集链接，重新加载合集列表
+                if (data.data && data.data.is_collection) {
+                    loadCollections();
+                }
             } else {
                 statusMessage.textContent = data && data.message ? data.message : '下载失败：未知错误';
                 statusMessage.style.color = '#dc3545';
@@ -878,6 +1087,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 加载账号列表
     loadAccounts();
+    
+    // 加载合集列表
+    loadCollections();
     
     // 加载设置
     loadSettings();

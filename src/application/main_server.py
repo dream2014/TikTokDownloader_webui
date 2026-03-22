@@ -738,13 +738,14 @@ class APIServer(TikTok):
                 # 处理多条链接（按换行分隔）
                 links = link.split('\n')
                 detail_ids = []
+                mix_links = []
                 
                 for link_item in links:
                     link_item = link_item.strip()
                     if not link_item:
                         continue
                     
-                    # 处理链接
+                    # 先获取完整链接
                     if platform == "douyin":
                         if not (url := await self.handle_redirect(link_item, proxy)):
                             return DataResponse(
@@ -752,29 +753,6 @@ class APIServer(TikTok):
                                 data=None,
                                 params={"link": link, "platform": platform, "proxy": proxy},
                             )
-                        # 提取作品ID
-                        import re
-                        match = re.search(r"video/(\d+)", url)
-                        if not match:
-                            # 尝试匹配图片合集链接（抖音）
-                            match = re.search(r"note/(\d+)", url)
-                            if not match:
-                                # 尝试匹配文章链接（抖音）
-                                match = re.search(r"article/(\d+)", url)
-                                if not match:
-                                    # 尝试匹配图片合集链接（TikTok）
-                                    match = re.search(r"photo/(\d+)", url)
-                                    if not match:
-                                        # 尝试匹配其他可能的链接格式
-                                        match = re.search(r"aweme/(\d+)", url)
-                                        if not match:
-                                            return DataResponse(
-                                                message=_('无法从链接中提取作品ID！'),
-                                                data=None,
-                                                params={"link": link, "platform": platform, "proxy": proxy},
-                                            )
-                        detail_id = match.group(1)
-                        detail_ids.append(detail_id)
                     elif platform == "tiktok":
                         if not (url := await self.handle_redirect_tiktok(link_item, proxy)):
                             return DataResponse(
@@ -782,6 +760,23 @@ class APIServer(TikTok):
                                 data=None,
                                 params={"link": link, "platform": platform, "proxy": proxy},
                             )
+                    else:
+                        return DataResponse(
+                            message=_('平台参数错误！'),
+                            data=None,
+                            params={"link": link, "platform": platform, "proxy": proxy},
+                        )
+                    
+                    # 打印完整链接，便于调试
+                    print(f"完整链接: {url}")
+                    
+                    # 检查是否为合集链接
+                    if platform == "douyin" and ('mix/' in url or 'collection/' in url):
+                        mix_links.append(url)
+                    elif platform == "tiktok" and ('playlist/' in url or 'collection/' in url):
+                        mix_links.append(url)
+                    else:
+                        # 处理普通作品链接
                         # 提取作品ID
                         import re
                         match = re.search(r"video/(\d+)", url)
@@ -798,28 +793,17 @@ class APIServer(TikTok):
                                         # 尝试匹配其他可能的链接格式
                                         match = re.search(r"aweme/(\d+)", url)
                                         if not match:
-                                            return DataResponse(
-                                                message=_('无法从链接中提取作品ID！'),
-                                                data=None,
-                                                params={"link": link, "platform": platform, "proxy": proxy},
-                                            )
+                                            # 尝试匹配合集链接中的作品ID
+                                            match = re.search(r'(\d{19})\b', url)
+                                            if not match:
+                                                return DataResponse(
+                                                    message=_('无法从链接中提取作品ID！'),
+                                                    data=None,
+                                                    params={"link": link, "platform": platform, "proxy": proxy},
+                                                )
                         detail_id = match.group(1)
                         detail_ids.append(detail_id)
-                    else:
-                        return DataResponse(
-                            message=_('平台参数错误！'),
-                            data=None,
-                            params={"link": link, "platform": platform, "proxy": proxy},
-                        )
                 
-                if not detail_ids:
-                    return DataResponse(
-                        message=_('未找到有效的作品ID！'),
-                        data=None,
-                        params={"link": link, "platform": platform, "proxy": proxy},
-                    )
-                
-                # 下载作品
                 # 从配置文件中获取cookie
                 settings_data = self.parameter.get_settings_data()
                 cookie = settings_data.get("cookie_tiktok" if platform == "tiktok" else "cookie", None)
@@ -830,22 +814,350 @@ class APIServer(TikTok):
                 elif cookie is None:
                     cookie = ""
                 
-                root, params, logger = self.record.run(self.parameter)
-                async with logger(root, console=self.console, **params) as record:
-                    if data := await self._handle_detail(
-                        detail_ids,
-                        platform == "tiktok",
-                        record,
-                        False,
-                        False,
-                        cookie,
-                        proxy,
-                    ):
-                        return DataResponse(
-                            message=_('下载成功！'),
-                            data={"save_path": str(root)},
-                            params={"link": link, "platform": platform, "proxy": proxy},
-                        )
+                # 处理合集链接
+                save_paths = []
+                if mix_links:
+                    for mix_link in mix_links:
+                        if platform == "douyin":
+                            # 处理抖音合集链接
+                            if not (url := await self.handle_redirect(mix_link, proxy)):
+                                return DataResponse(
+                                    message=_('链接解析失败！'),
+                                    data=None,
+                                    params={"link": link, "platform": platform, "proxy": proxy},
+                                )
+                            # 提取合集ID
+                            import re
+                            match = re.search(r"(mix|collection)/(\d+)", url)
+                            if not match:
+                                return DataResponse(
+                                    message=_('无法从链接中提取合集ID！'),
+                                    data=None,
+                                    params={"link": link, "platform": platform, "proxy": proxy},
+                                )
+                            mix_id = match.group(2)
+                            # 处理合集
+                            deal_result = await self.deal_mix_detail(
+                                True,
+                                mix_id,
+                                api=False,
+                                source=False,
+                                cookie=cookie,
+                                proxy=proxy,
+                                tiktok=False,
+                            )
+                            
+                            # 无论处理结果如何，都保存合集信息
+                            # 保存合集信息到配置文件
+                            settings_data = self.parameter.get_settings_data()
+                            collections = settings_data.get("collections", [])
+                            
+                            # 检查合集是否已存在
+                            collection_exists = False
+                            for collection in collections:
+                                if collection.get("id") == mix_id and collection.get("platform") == "douyin":
+                                    collection_exists = True
+                                    break
+                            
+                            if not collection_exists:
+                                # 获取合集信息
+                                # 尝试从合集数据中获取用户名和合集名称
+                                username = "未知用户"
+                                mix_title = ""
+                                try:
+                                    # 调用deal_mix_detail获取合集数据，api=True表示只获取数据不下载
+                                    mix_data = await self.deal_mix_detail(
+                                        True,
+                                        mix_id,
+                                        api=True,
+                                        source=False,
+                                        cookie=cookie,
+                                        proxy=proxy,
+                                        tiktok=False,
+                                    )
+                                    
+                                    # 打印调试信息
+                                    print(f"获取到的合集数据类型: {type(mix_data)}")
+                                    
+                                    # 定义一个函数来递归查找包含"十一"的字段
+                                    def find_fields_with_value(data, path=""):
+                                        if isinstance(data, dict):
+                                            for key, value in data.items():
+                                                current_path = f"{path}.{key}" if path else key
+                                                if isinstance(value, str) and "十一" in value:
+                                                    print(f"找到包含'十一'的字段: {current_path} = {value}")
+                                                elif isinstance(value, (dict, list)):
+                                                    find_fields_with_value(value, current_path)
+                                        elif isinstance(data, list):
+                                            for i, item in enumerate(data):
+                                                current_path = f"{path}[{i}]" if path else f"[{i}]"
+                                                if isinstance(item, (dict, list)):
+                                                    find_fields_with_value(item, current_path)
+                                                elif isinstance(item, str) and "十一" in item:
+                                                    print(f"找到包含'十一'的字段: {current_path} = {item}")
+                                    
+                                    # 递归查找包含"十一"的字段
+                                    print("开始查找包含'十一'的字段...")
+                                    find_fields_with_value(mix_data)
+                                    
+                                    if mix_data and isinstance(mix_data, list) and len(mix_data) > 0:
+                                        # 从列表中的第一个元素获取用户名和合集名称
+                                        first_item = mix_data[0]
+                                        if isinstance(first_item, dict):
+                                            # 尝试从多个可能的字段获取账号名称
+                                            # 首先尝试从music_author字段获取，因为这是包含"十一"的字段
+                                            if 'music_author' in first_item:
+                                                username = first_item['music_author']
+                                                print(f"从music_author字段获取到账号名称: {username}")
+                                            elif 'nickname' in first_item:
+                                                username = first_item['nickname']
+                                                print(f"从nickname字段获取到账号名称: {username}")
+                                            elif 'author' in first_item and isinstance(first_item['author'], dict):
+                                                if 'nickname' in first_item['author']:
+                                                    username = first_item['author']['nickname']
+                                                    print(f"从author.nickname字段获取到账号名称: {username}")
+                                                elif 'user_name' in first_item['author']:
+                                                    username = first_item['author']['user_name']
+                                                    print(f"从author.user_name字段获取到账号名称: {username}")
+                                                elif 'nickname' in first_item['author'].get('user_info', {}):
+                                                    username = first_item['author']['user_info']['nickname']
+                                                    print(f"从author.user_info.nickname字段获取到账号名称: {username}")
+                                            elif 'user_info' in first_item and isinstance(first_item['user_info'], dict):
+                                                if 'nickname' in first_item['user_info']:
+                                                    username = first_item['user_info']['nickname']
+                                                    print(f"从user_info.nickname字段获取到账号名称: {username}")
+                                                elif 'user_name' in first_item['user_info']:
+                                                    username = first_item['user_info']['user_name']
+                                                    print(f"从user_info.user_name字段获取到账号名称: {username}")
+                                            # 尝试获取合集名称
+                                            # 从nickname字段获取合集名称，因为调试信息显示nickname字段的值是"作文素材"
+                                            if 'nickname' in first_item:
+                                                mix_title = first_item['nickname']
+                                                print(f"从nickname字段获取到合集名称: {mix_title}")
+                                            elif 'mix_title' in first_item:
+                                                mix_title = first_item['mix_title']
+                                                print(f"从mix_title字段获取到合集名称: {mix_title}")
+                                            elif 'title' in first_item:
+                                                mix_title = first_item['title']
+                                                print(f"从title字段获取到合集名称: {mix_title}")
+                                        # 视频总数就是列表的长度
+                                        total_videos = len(mix_data)
+                                    elif mix_data and isinstance(mix_data, dict):
+                                        # 兼容字典格式的数据
+                                        # 尝试从多个可能的字段获取账号名称
+                                        # 首先尝试从music_author字段获取，因为这是包含"十一"的字段
+                                        if 'music_author' in mix_data:
+                                            username = mix_data['music_author']
+                                            print(f"从music_author字段获取到账号名称: {username}")
+                                        elif 'nickname' in mix_data:
+                                            username = mix_data['nickname']
+                                            print(f"从nickname字段获取到账号名称: {username}")
+                                        elif 'author' in mix_data and isinstance(mix_data['author'], dict):
+                                            if 'nickname' in mix_data['author']:
+                                                username = mix_data['author']['nickname']
+                                                print(f"从author.nickname字段获取到账号名称: {username}")
+                                                # 打印author字段的所有键
+                                                print(f"author字段的所有键: {list(mix_data['author'].keys())}")
+                                            elif 'user_name' in mix_data['author']:
+                                                username = mix_data['author']['user_name']
+                                                print(f"从author.user_name字段获取到账号名称: {username}")
+                                            elif 'nickname' in mix_data['author'].get('user_info', {}):
+                                                username = mix_data['author']['user_info']['nickname']
+                                                print(f"从author.user_info.nickname字段获取到账号名称: {username}")
+                                        elif 'user_info' in mix_data and isinstance(mix_data['user_info'], dict):
+                                            if 'nickname' in mix_data['user_info']:
+                                                username = mix_data['user_info']['nickname']
+                                                print(f"从user_info.nickname字段获取到账号名称: {username}")
+                                            elif 'user_name' in mix_data['user_info']:
+                                                username = mix_data['user_info']['user_name']
+                                                print(f"从user_info.user_name字段获取到账号名称: {username}")
+                                        # 尝试获取合集名称
+                                        # 从nickname字段获取合集名称，因为调试信息显示nickname字段的值是"作文素材"
+                                        if 'nickname' in mix_data:
+                                            mix_title = mix_data['nickname']
+                                            print(f"从nickname字段获取到合集名称: {mix_title}")
+                                        elif 'mix_title' in mix_data:
+                                            mix_title = mix_data['mix_title']
+                                            print(f"从mix_title字段获取到合集名称: {mix_title}")
+                                        elif 'title' in mix_data:
+                                            mix_title = mix_data['title']
+                                            print(f"从title字段获取到合集名称: {mix_title}")
+                                        # 从合集数据中获取视频总数
+                                        total_videos = len(mix_data.get('aweme_list', []))
+                                    else:
+                                        total_videos = 0
+                                except Exception as e:
+                                    # 获取失败时使用默认值
+                                    print(f"获取合集信息失败: {str(e)}")
+                                    total_videos = 0
+                                
+                                # 组合账号名称和合集名称
+                                display_name = username
+                                if mix_title:
+                                    display_name = f"{username}_{mix_title}"
+                                
+                                # 添加合集信息
+                                new_collection = {
+                                    "id": mix_id,
+                                    "platform": "douyin",
+                                    "username": display_name,
+                                    "url": url,
+                                    "total_videos": total_videos
+                                }
+                                collections.append(new_collection)
+                                
+                                # 保存到配置文件
+                                settings_data["collections"] = collections
+                                await self.parameter.set_settings_data(settings_data)
+                            
+                            # 如果处理成功，添加保存路径
+                            if deal_result:
+                                # 获取保存路径
+                                root = self.record.run(self.parameter)[0]
+                                save_paths.append(str(root))
+                        elif platform == "tiktok":
+                            # 处理TikTok合集链接
+                            if not (url := await self.handle_redirect_tiktok(mix_link, proxy)):
+                                return DataResponse(
+                                    message=_('链接解析失败！'),
+                                    data=None,
+                                    params={"link": link, "platform": platform, "proxy": proxy},
+                                )
+                            # 提取合集ID
+                            import re
+                            match = re.search(r"playlist/(\d+)", url)
+                            if not match:
+                                return DataResponse(
+                                    message=_('无法从链接中提取合集ID！'),
+                                    data=None,
+                                    params={"link": link, "platform": platform, "proxy": proxy},
+                                )
+                            mix_id = match.group(1)
+                            # 处理合集
+                            deal_result = await self.deal_mix_detail(
+                                True,
+                                mix_id,
+                                api=False,
+                                source=False,
+                                cookie=cookie,
+                                proxy=proxy,
+                                tiktok=True,
+                            )
+                            
+                            # 无论处理结果如何，都保存合集信息
+                            # 保存合集信息到配置文件
+                            settings_data = self.parameter.get_settings_data()
+                            collections = settings_data.get("collections", [])
+                            
+                            # 检查合集是否已存在
+                            collection_exists = False
+                            for collection in collections:
+                                if collection.get("id") == mix_id and collection.get("platform") == "tiktok":
+                                    collection_exists = True
+                                    break
+                            
+                            if not collection_exists:
+                                # 获取合集信息
+                                # 尝试从合集数据中获取用户名和合集名称
+                                username = "未知用户"
+                                mix_title = ""
+                                try:
+                                    # 调用deal_mix_detail获取合集数据，api=True表示只获取数据不下载
+                                    mix_data = await self.deal_mix_detail(
+                                        True,
+                                        mix_id,
+                                        api=True,
+                                        source=False,
+                                        cookie=cookie,
+                                        proxy=proxy,
+                                        tiktok=True,
+                                    )
+                                    if mix_data and isinstance(mix_data, list) and len(mix_data) > 0:
+                                        # 从列表中的第一个元素获取用户名
+                                        first_item = mix_data[0]
+                                        if isinstance(first_item, dict):
+                                            if 'nickname' in first_item:
+                                                username = first_item['nickname']
+                                            elif 'author' in first_item and isinstance(first_item['author'], dict) and 'nickname' in first_item['author']:
+                                                username = first_item['author']['nickname']
+                                            # 尝试获取合集名称
+                                            if 'mix_title' in first_item:
+                                                mix_title = first_item['mix_title']
+                                            elif 'title' in first_item:
+                                                mix_title = first_item['title']
+                                        # 视频总数就是列表的长度
+                                        total_videos = len(mix_data)
+                                    elif mix_data and isinstance(mix_data, dict):
+                                        # 兼容字典格式的数据
+                                        if 'nickname' in mix_data:
+                                            username = mix_data['nickname']
+                                        elif 'author' in mix_data and isinstance(mix_data['author'], dict) and 'nickname' in mix_data['author']:
+                                            username = mix_data['author']['nickname']
+                                        # 尝试获取合集名称
+                                        if 'mix_title' in mix_data:
+                                            mix_title = mix_data['mix_title']
+                                        elif 'title' in mix_data:
+                                            mix_title = mix_data['title']
+                                        # 从合集数据中获取视频总数
+                                        total_videos = len(mix_data.get('aweme_list', []))
+                                    else:
+                                        total_videos = 0
+                                except Exception as e:
+                                    # 获取失败时使用默认值
+                                    total_videos = 0
+                                
+                                # 组合账号名称和合集名称
+                                display_name = username
+                                if mix_title:
+                                    display_name = f"{username}_{mix_title}"
+                                
+                                # 添加合集信息
+                                new_collection = {
+                                    "id": mix_id,
+                                    "platform": "tiktok",
+                                    "username": display_name,
+                                    "url": url,
+                                    "total_videos": total_videos
+                                }
+                                collections.append(new_collection)
+                                
+                                # 保存到配置文件
+                                settings_data["collections"] = collections
+                                await self.parameter.set_settings_data(settings_data)
+                            
+                            # 如果处理成功，添加保存路径
+                            if deal_result:
+                                # 获取保存路径
+                                root = self.record.run(self.parameter)[0]
+                                save_paths.append(str(root))
+                
+                # 处理普通作品链接
+                if detail_ids:
+                    root, params, logger = self.record.run(self.parameter)
+                    async with logger(root, console=self.console, **params) as record:
+                        if data := await self._handle_detail(
+                            detail_ids,
+                            platform == "tiktok",
+                            record,
+                            False,
+                            False,
+                            cookie,
+                            proxy,
+                        ):
+                            save_paths.append(str(root))
+                
+                if not save_paths:
+                    return DataResponse(
+                        message=_('下载失败！'),
+                        data=None,
+                        params={"link": link, "platform": platform, "proxy": proxy},
+                    )
+                
+                return DataResponse(
+                    message=_('下载成功！'),
+                    data={"save_path": "; ".join(save_paths), "is_collection": len(mix_links) > 0},
+                    params={"link": link, "platform": platform, "proxy": proxy},
+                )
             except Exception as e:
                 return DataResponse(
                     message=_('下载失败：{error}').format(error=str(e)),
@@ -1472,6 +1784,160 @@ class APIServer(TikTok):
                     message=_('批量下载账号作品失败：{error}').format(error=str(e)),
                     data=None,
                     params={"account_id": account_id, "tab": tab},
+                )
+
+        @self.server.get(
+            "/collections",
+            summary=_('获取合集列表'),
+            description=_('获取所有已保存的合集'),
+            tags=[_('合集管理')],
+            response_model=DataResponse,
+        )
+        async def get_collections(token: str = Depends(token_dependency)):
+            try:
+                # 从配置文件读取合集信息
+                settings_data = self.parameter.get_settings_data()
+                collections = settings_data.get("collections", [])
+                
+                return DataResponse(
+                    message=_('获取合集列表成功！'),
+                    data=collections,
+                    params=None,
+                )
+            except Exception as e:
+                return DataResponse(
+                    message=_('获取合集列表失败：{error}').format(error=str(e)),
+                    data=None,
+                    params=None,
+                )
+
+        @self.server.delete(
+            "/collections/{collection_id}",
+            summary=_('删除合集'),
+            description=_('根据合集ID删除合集'),
+            tags=[_('合集管理')],
+            response_model=DataResponse,
+        )
+        async def delete_collection(
+            collection_id: str, token: str = Depends(token_dependency)
+        ):
+            try:
+                # 从配置文件读取合集信息
+                settings_data = self.parameter.get_settings_data()
+                collections = settings_data.get("collections", [])
+                
+                # 查找并删除合集
+                updated_collections = [c for c in collections if c.get("id") != collection_id]
+                
+                if len(updated_collections) == len(collections):
+                    return DataResponse(
+                        message=_('合集不存在！'),
+                        data=None,
+                        params={"collection_id": collection_id},
+                    )
+                
+                # 保存到配置文件
+                settings_data["collections"] = updated_collections
+                await self.parameter.set_settings_data(settings_data)
+                
+                return DataResponse(
+                    message=_('删除合集成功！'),
+                    data=None,
+                    params={"collection_id": collection_id},
+                )
+            except Exception as e:
+                return DataResponse(
+                    message=_('删除合集失败：{error}').format(error=str(e)),
+                    data=None,
+                    params={"collection_id": collection_id},
+                )
+
+        @self.server.post(
+            "/collections/{collection_id}/download",
+            summary=_('下载合集'),
+            description=_('根据合集ID下载合集'),
+            tags=[_('合集管理')],
+            response_model=DataResponse,
+        )
+        async def download_collection(
+            collection_id: str, token: str = Depends(token_dependency)
+        ):
+            try:
+                # 从配置文件读取合集信息
+                settings_data = self.parameter.get_settings_data()
+                collections = settings_data.get("collections", [])
+                
+                # 查找合集
+                collection = None
+                for c in collections:
+                    if c.get("id") == collection_id:
+                        collection = c
+                        break
+                
+                if not collection:
+                    return DataResponse(
+                        message=_('合集不存在！'),
+                        data=None,
+                        params={"collection_id": collection_id},
+                    )
+                
+                # 从配置文件中获取cookie
+                cookie = settings_data.get("cookie_tiktok" if collection.get("platform") == "tiktok" else "cookie", None)
+                # 确保cookie是字符串类型
+                from ..tools import cookie_dict_to_str
+                if isinstance(cookie, dict):
+                    cookie = cookie_dict_to_str(cookie)
+                elif cookie is None:
+                    cookie = ""
+                
+                # 处理合集
+                if collection.get("platform") == "douyin":
+                    # 处理抖音合集
+                    if await self.deal_mix_detail(
+                        True,
+                        collection.get("id"),
+                        api=False,
+                        source=False,
+                        cookie=cookie,
+                        proxy=None,
+                        tiktok=False,
+                    ):
+                        # 获取保存路径
+                        root = self.record.run(self.parameter)[0]
+                        return DataResponse(
+                            message=_('下载合集成功！'),
+                            data={"save_path": str(root), "total_videos": collection.get("total_videos", 0)},
+                            params={"collection_id": collection_id},
+                        )
+                elif collection.get("platform") == "tiktok":
+                    # 处理TikTok合集
+                    if await self.deal_mix_detail(
+                        True,
+                        collection.get("id"),
+                        api=False,
+                        source=False,
+                        cookie=cookie,
+                        proxy=None,
+                        tiktok=True,
+                    ):
+                        # 获取保存路径
+                        root = self.record.run(self.parameter)[0]
+                        return DataResponse(
+                            message=_('下载合集成功！'),
+                            data={"save_path": str(root), "total_videos": collection.get("total_videos", 0)},
+                            params={"collection_id": collection_id},
+                        )
+                
+                return DataResponse(
+                    message=_('下载合集失败！'),
+                    data=None,
+                    params={"collection_id": collection_id},
+                )
+            except Exception as e:
+                return DataResponse(
+                    message=_('下载合集失败：{error}').format(error=str(e)),
+                    data=None,
+                    params={"collection_id": collection_id},
                 )
 
         

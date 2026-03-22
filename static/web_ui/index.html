@@ -44,6 +44,32 @@
                         <div id="progress-fill" class="progress-fill"></div>
                     </div>
                 </div>
+                <div id="collection-list" class="collection-list">
+                    <h3>合集列表</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="collection-table" style="table-layout: fixed; width: 100%;">
+                            <colgroup>
+                                <col style="width: 6em;">
+                                <col style="width: 10em;">
+                                <col style="width: 10em;">
+                                <col style="width: 8em;">
+                                <col style="width: 20em;">
+                            </colgroup>
+                            <thead>
+                                <tr>
+                                    <th>平台</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">账号名称</th>
+                                    <th>操作</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">下载状态</th>
+                                    <th style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">合集地址</th>
+                                </tr>
+                            </thead>
+                            <tbody id="collection-table-body">
+                                <!-- 合集列表将通过 JavaScript 动态生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
             
             <section id="account" class="content-section">

@@ -824,7 +824,8 @@ class Parameter:
         return FFMPEG(ffmpeg_path)
 
     def get_settings_data(self) -> dict:
-        return {
+        # 先获取基础设置数据
+        settings_data = {
             "accounts_urls": [vars(i) for i in self.accounts_urls],
             "accounts_urls_tiktok": [vars(i) for i in self.accounts_urls_tiktok],
             "mix_urls": [vars(i) for i in self.mix_urls],
@@ -865,11 +866,25 @@ class Parameter:
             "download_quality": self.download_quality,
             "thread_count": self.thread_count,
         }
+        
+        # 读取配置文件，获取 collections 键
+        try:
+            config_data = self.settings.read()
+            if isinstance(config_data, dict):
+                settings_data["collections"] = config_data.get("collections", [])
+        except Exception:
+            # 如果读取失败，添加空的 collections 键
+            settings_data["collections"] = []
+        
+        return settings_data
 
     async def set_settings_data(
         self,
         data: dict,
     ) -> None:
+        # 保存 collections 键
+        collections = data.pop("collections", None)
+        
         self.set_urls_params(
             data.pop("accounts_urls", []),
             data.pop("mix_urls", []),
@@ -911,6 +926,10 @@ class Parameter:
         self.set_general_params(data)
         # 保存设置到配置文件
         settings_data = self.get_settings_data()
+        # 如果有 collections 键，添加到 settings_data 中
+        if collections is not None:
+            settings_data["collections"] = collections
+        # 直接更新配置文件，不修改 self.settings 对象
         self.settings.update(settings_data)
 
     async def __update_cookie_data(self, data: dict) -> None:
@@ -998,7 +1017,7 @@ class Parameter:
 
     def set_general_params(self, data: dict[str, Any]) -> None:
         for i, j in data.items():
-            if j is not None:
+            if j is not None and i in self.__CHECK:
                 # 检查参数并设置值
                 setattr(self, i, self.__CHECK[i](j))
 

@@ -187,14 +187,14 @@ main {
 }
 
 /* 表格样式 */
-.account-table {
+.account-table, .collection-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
     table-layout: fixed;
 }
 
-.account-table th {
+.account-table th, .collection-table th {
     background-color: #f2f2f2;
     text-align: left;
     padding: 12px;
@@ -203,7 +203,7 @@ main {
     cursor: col-resize;
 }
 
-.account-table th::after {
+.account-table th::after, .collection-table th::after {
     content: '';
     position: absolute;
     top: 0;
@@ -214,30 +214,30 @@ main {
     background-color: transparent;
 }
 
-.account-table th:hover::after {
+.account-table th:hover::after, .collection-table th:hover::after {
     background-color: #4CAF50;
     opacity: 0.5;
 }
 
-.account-table td:nth-child(3) {
+.account-table td:nth-child(3), .collection-table td:nth-child(3) {
     white-space: nowrap; /* 确保按钮横向排列 */
 }
 
-.account-table td:nth-child(3) .btn {
+.account-table td:nth-child(3) .btn, .collection-table td:nth-child(3) .btn {
     display: inline-block; /* 确保按钮横向排列 */
     margin-right: 5px; /* 按钮之间的间距 */
 }
 
-.account-table td:nth-child(3) .btn:last-child {
+.account-table td:nth-child(3) .btn:last-child, .collection-table td:nth-child(3) .btn:last-child {
     margin-right: 0; /* 最后一个按钮没有右边距 */
 }
 
-.account-table td {
+.account-table td, .collection-table td {
     padding: 12px;
     border-bottom: 1px solid #ddd;
 }
 
-.account-table tr:hover {
+.account-table tr:hover, .collection-table tr:hover {
     background-color: #f5f5f5;
 }
 
@@ -304,6 +304,11 @@ footer {
 
 .status-message.error {
     color: #dc3545;
+}
+
+.collection-list {
+    margin-top: 20px;
+    min-height: 100px;
 }
 
 /* 响应式设计 */

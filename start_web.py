@@ -3,9 +3,56 @@ import webbrowser
 import time
 import socket
 import os
+import subprocess
 from asyncio import run
 from src.application import TikTokDownloader
 from src.custom import PROJECT_ROOT
+
+def kill_process_on_port(port):
+    """终止在指定端口上运行的进程"""
+    try:
+        # 使用 netstat 命令查找在指定端口上运行的进程
+        if sys.platform == 'win32':
+            # Windows 系统
+            cmd = f'netstat -ano | findstr :{port}'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.stdout:
+                # 解析输出，获取进程ID
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) >= 5:
+                        pid = parts[4]
+                        # 终止进程
+                        try:
+                            subprocess.run(f'taskkill /F /PID {pid}', shell=True, check=True)
+                            print(f"已终止在端口 {port} 上运行的进程 (PID: {pid})")
+                        except subprocess.CalledProcessError:
+                            print(f"终止进程 {pid} 失败")
+        else:
+            # Linux/macOS 系统
+            cmd = f'lsof -i :{port}'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if result.stdout:
+                # 解析输出，获取进程ID
+                lines = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+                for line in lines:
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        pid = parts[1]
+                        # 终止进程
+                        try:
+                            subprocess.run(f'kill -9 {pid}', shell=True, check=True)
+                            print(f"已终止在端口 {port} 上运行的进程 (PID: {pid})")
+                        except subprocess.CalledProcessError:
+                            print(f"终止进程 {pid} 失败")
+    except Exception as e:
+        print(f"检测并终止进程时发生错误: {e}")
+
+# 检测并终止在端口 5555 上运行的进程
+print("正在检测是否有服务器进程在运行...")
+kill_process_on_port(5555)
+print("检测完成，准备启动新服务器...")
 
 # 打印当前工作目录
 print(f"当前工作目录: {os.getcwd()}")
